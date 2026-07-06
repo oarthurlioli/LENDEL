@@ -255,7 +255,7 @@ function LoginView({ onLogin }) {
   };
 
   return (
-    <div className="w-full h-full overflow-y-auto overflow-x-hidden login-bg" style={{ padding: "32px 24px" }}>
+    <div className="w-full h-full overflow-y-auto overflow-x-hidden login-bg" style={{ padding: "calc(32px + env(safe-area-inset-top, 0px)) 24px calc(32px + env(safe-area-inset-bottom, 0px))" }}>
       <div className="login-header">
         <h1 className="michroma-title">LENDEL DINIZ</h1>
         <p>Acesse sua conta para gerenciar seus treinos</p>
@@ -2756,7 +2756,13 @@ function AppContent() {
       {/* Main viewport */}
       <div 
         className="flex-1 overflow-y-auto overflow-x-hidden"
-        style={{ paddingBottom: showNavbar ? 84 : 24, scrollbarWidth: "none" }}
+        style={{ 
+          paddingTop: showNavbar ? 0 : "env(safe-area-inset-top, 24px)",
+          paddingBottom: showNavbar 
+            ? "calc(88px + env(safe-area-inset-bottom, 0px))" 
+            : "calc(24px + env(safe-area-inset-bottom, 0px))", 
+          scrollbarWidth: "none" 
+        }}
       >
         {isTeacher ? (
           editingStudent ? (
