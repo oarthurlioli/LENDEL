@@ -306,11 +306,10 @@ h1, h2, h3, h4, h5, h6 {
   position: relative;
   z-index: 50;
   display: flex;
-  align-items: flex-end; /* Align items to the bottom of the safe-padded header */
+  align-items: center; /* Vertically center items */
   justify-content: space-between;
-  padding: 0 20px 10px;
+  padding: env(safe-area-inset-top, 0px) 20px 0;
   height: calc(58px + env(safe-area-inset-top, 0px));
-  padding-top: env(safe-area-inset-top, 0px);
   background: var(--tab-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);

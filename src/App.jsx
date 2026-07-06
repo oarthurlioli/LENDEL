@@ -2700,13 +2700,14 @@ function AppContent() {
     );
   }
 
-  const showNavbar = !['/execucao', '/agenda', '/feedback', '/perfil'].includes(location.pathname) && !editingStudent && !editingStudentDiet;
+  const showTopHeader = !['/execucao', '/agenda', '/feedback', '/perfil'].includes(location.pathname) && !editingStudent && !editingStudentDiet;
+  const showBottomNavbar = !!currentUser;
   const isTeacher = currentUser.role === 'teacher';
 
   return (
     <div className="app-container">
       {/* Top Header */}
-      {showNavbar && (
+      {showTopHeader && (
         <div className="app-header">
           <span 
             className="michroma-title"
@@ -2757,8 +2758,8 @@ function AppContent() {
       <div 
         className="flex-1 overflow-y-auto overflow-x-hidden"
         style={{ 
-          paddingTop: showNavbar ? 0 : "env(safe-area-inset-top, 24px)",
-          paddingBottom: showNavbar 
+          paddingTop: showTopHeader ? 0 : "env(safe-area-inset-top, 24px)",
+          paddingBottom: showBottomNavbar 
             ? "calc(88px + env(safe-area-inset-bottom, 0px))" 
             : "calc(24px + env(safe-area-inset-bottom, 0px))", 
           scrollbarWidth: "none" 
@@ -2841,7 +2842,7 @@ function AppContent() {
       </div>
 
       {/* Tab Menu Bar */}
-      {showNavbar && (
+      {showBottomNavbar && (
         <div className="app-navbar">
           {isTeacher ? (
             [
