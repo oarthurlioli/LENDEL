@@ -255,7 +255,7 @@ function LoginView({ onLogin }) {
   };
 
   return (
-    <div className="relative w-full min-h-[100dvh] login-bg">
+    <div className="w-full h-full overflow-y-auto overflow-x-hidden login-bg" style={{ padding: "32px 24px" }}>
       <div className="login-header">
         <h1 className="michroma-title">LENDEL DINIZ</h1>
         <p>Acesse sua conta para gerenciar seus treinos</p>
@@ -501,7 +501,7 @@ function HomeView({ profile, diet }) {
   );
 }
 
-function TreinosView({ workouts, setActiveExerciseIndex, setCheckedSets }) {
+function TreinosView({ workouts, setActiveExerciseIndex, setCheckedSets, setActiveWorkoutLetter }) {
   const navigate = useNavigate();
   const filters = ["Todos", "Treino A", "Treino B", "Treino C"];
   const [selectedFilter, setSelectedFilter] = useState("Todos");
@@ -544,6 +544,7 @@ function TreinosView({ workouts, setActiveExerciseIndex, setCheckedSets }) {
             key={workout.letter}
             className="premium-card cursor-pointer"
             onClick={() => {
+              setActiveWorkoutLetter(workout.letter);
               setActiveExerciseIndex(0);
               setCheckedSets({});
               navigate('/execucao');
@@ -787,7 +788,7 @@ function DietaView({ diet, waterGlasses, handleUpdateWater, activeMealIndex, set
   );
 }
 
-function ComunidadeView({ posts, likedPosts, handleToggleLike }) {
+function ComunidadeView({ posts, likedPosts, handleToggleLike, onDeletePost, currentUser }) {
   return (
     <div style={{ paddingBottom: 24, paddingTop: 16 }}>
       <div className="flex justify-between items-center px-5 pb-5">
@@ -805,28 +806,41 @@ function ComunidadeView({ posts, likedPosts, handleToggleLike }) {
           const hasLiked = likedPosts[i];
           return (
             <div key={post.id || i} className="premium-card mb-3">
-              <div className="flex items-center gap-3 mb-3">
-                <div 
-                  className="flex items-center justify-center"
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: "50%",
-                    background: post.is_personal || post.accentAvatar ? "var(--app-accent-soft)" : "var(--bg-elevated)",
-                    fontSize: 14,
-                    fontWeight: 800,
-                    color: post.is_personal || post.accentAvatar ? "var(--app-accent)" : "var(--text-secondary)"
-                  }}
-                >
-                  {post.avatar}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: "var(--text-primary)" }}>{post.name}</span>
-                    {post.is_personal && <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 6px", borderRadius: 6, background: "var(--app-accent-soft)", color: "var(--app-accent)" }}>Personal</span>}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div 
+                    className="flex items-center justify-center"
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: "50%",
+                      background: post.is_personal || post.accentAvatar ? "var(--app-accent-soft)" : "var(--bg-elevated)",
+                      fontSize: 14,
+                      fontWeight: 800,
+                      color: post.is_personal || post.accentAvatar ? "var(--app-accent)" : "var(--text-secondary)"
+                    }}
+                  >
+                    {post.avatar}
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{post.time || "Recentemente"}</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: "var(--text-primary)" }}>{post.name}</span>
+                      {post.is_personal && <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, padding: "2px 6px", borderRadius: 6, background: "var(--app-accent-soft)", color: "var(--app-accent)" }}>Personal</span>}
+                    </div>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{post.time || "Recentemente"}</span>
+                  </div>
                 </div>
+
+                {currentUser && currentUser.role === 'teacher' && (
+                  <button 
+                    onClick={() => onDeletePost && onDeletePost(post.id, i)}
+                    className="flex items-center justify-center cursor-pointer border-none"
+                    style={{ background: "transparent", padding: 6, borderRadius: 8, transition: "background 0.2s" }}
+                    title="Excluir publicação"
+                  >
+                    <Trash2 size={16} style={{ color: "var(--app-red)" }} />
+                  </button>
+                )}
               </div>
 
               <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5, marginBottom: 14 }}>{post.content}</p>
@@ -1043,12 +1057,44 @@ function PerfilView({ profile, uiTheme, setUiTheme, onLogout }) {
 }
 
 function ExecucaoView({ 
+  activeWorkout,
   activeExerciseIndex, setActiveExerciseIndex, checkedSets, toggleSetCheck,
   timerSeconds, timerRunning, handleStartTimer, handleSkipTimer, formatTimer
 }) {
   const navigate = useNavigate();
-  const exercise = EXERCISES_EXECUTION[activeExerciseIndex];
+
+  const exercisesList = (activeWorkout && activeWorkout.preview && activeWorkout.preview.length > 0)
+    ? activeWorkout.preview
+    : [{ name: "Sem exercícios cadastrados", muscles: "Nenhum", sets: "4x12", videoUrl: "" }];
   
+  const exercise = exercisesList[activeExerciseIndex] || exercisesList[0];
+
+  // Parse sets and reps (e.g. "4x12" -> sets: 4, reps: "12")
+  const setsText = exercise.sets || "4x12";
+  const setsCount = parseInt(setsText.split('x')[0]) || 4;
+  const repsText = setsText.split('x')[1] || "12";
+
+  // Helper to extract YouTube video ID and return embed URL
+  const getYouTubeEmbedUrl = (url) => {
+    if (!url) return null;
+    let videoId = null;
+    try {
+      if (url.includes('youtube.com/watch')) {
+        const urlParams = new URLSearchParams(new URL(url).search);
+        videoId = urlParams.get('v');
+      } else if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1]?.split('?')[0];
+      } else if (url.includes('youtube.com/embed/')) {
+        return url;
+      }
+    } catch (e) {
+      console.error("Erro ao analisar URL do YouTube:", e);
+    }
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
+  };
+
+  const ytEmbedUrl = getYouTubeEmbedUrl(exercise.videoUrl);
+
   return (
     <div style={{ paddingBottom: 24 }}>
       {/* Header */}
@@ -1061,8 +1107,8 @@ function ExecucaoView({
           <ChevronLeft size={18} style={{ color: "var(--text-primary)" }} />
         </button>
         <div className="text-center">
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>Treino A</h2>
-          <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>Peito e Tríceps</p>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>Treino {activeWorkout?.letter || 'A'}</h2>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>{activeWorkout?.title || 'Personalizado'}</p>
         </div>
         <button 
           className="flex items-center justify-center cursor-pointer border-none"
@@ -1081,13 +1127,13 @@ function ExecucaoView({
       {/* Progress bar */}
       <div className="flex items-center gap-2.5 px-5 pb-4">
         <span style={{ fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
-          {activeExerciseIndex + 1} de {EXERCISES_EXECUTION.length}
+          {activeExerciseIndex + 1} de {exercisesList.length}
         </span>
         <div style={{ flex: 1, height: 4, background: "var(--bg-elevated)", borderRadius: 100, overflow: "hidden" }}>
           <div 
             style={{
               height: "100%",
-              width: `${((activeExerciseIndex + 1) / EXERCISES_EXECUTION.length) * 100}%`,
+              width: `${((activeExerciseIndex + 1) / exercisesList.length) * 100}%`,
               background: "var(--app-accent)",
               borderRadius: 100,
               transition: "width 0.4s"
@@ -1104,30 +1150,47 @@ function ExecucaoView({
             borderRadius: 20
           }}
         >
-          {activeExerciseIndex + 1}/{EXERCISES_EXECUTION.length}
+          {activeExerciseIndex + 1}/{exercisesList.length}
         </span>
       </div>
 
-      {/* Video Demonstration */}
+      {/* Video Demonstration / Video Player */}
       <div 
-        className="mx-5 mb-5 flex flex-col items-center justify-center gap-2.5 relative overflow-hidden"
+        className="mx-5 mb-5 flex flex-col items-center justify-center relative overflow-hidden"
         style={{ height: 200, background: "var(--bg-card)", border: "1px solid var(--app-border)", borderRadius: 20 }}
       >
-        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--app-accent-soft), transparent)" }} />
-        <div 
-          className="flex items-center justify-center relative z-10"
-          style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--app-accent)", boxShadow: "0 4px 20px var(--app-accent-glow)", cursor: "pointer" }}
-          onClick={() => alert("Vídeo demonstrativo carregando...")}
-        >
-          <Play size={24} fill="#fff" stroke="none" style={{ marginLeft: 3 }} />
-        </div>
-        <span className="relative z-10" style={{ fontSize: 12, color: "var(--text-muted)" }}>Vídeo demonstrativo</span>
+        {ytEmbedUrl ? (
+          <iframe 
+            src={ytEmbedUrl} 
+            title={exercise.name}
+            style={{ width: '100%', height: '100%', border: 'none' }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowFullScreen
+          />
+        ) : exercise.videoUrl ? (
+          <video 
+            src={exercise.videoUrl} 
+            controls 
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+          />
+        ) : (
+          <>
+            <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, var(--app-accent-soft), transparent)" }} />
+            <div 
+              className="flex items-center justify-center relative z-10"
+              style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--app-accent)", boxShadow: "0 4px 20px var(--app-accent-glow)", cursor: "default" }}
+            >
+              <Play size={24} fill="#fff" stroke="none" style={{ marginLeft: 3 }} />
+            </div>
+            <span className="relative z-10" style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>Sem vídeo cadastrado</span>
+          </>
+        )}
       </div>
 
       {/* Exercise metadata */}
       <div className="text-center px-5 pb-4">
         <h2 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", marginBottom: 4 }}>{exercise.name}</h2>
-        <span style={{ fontSize: 13, color: "var(--app-accent)", fontWeight: 600 }}>{exercise.muscles}</span>
+        <span style={{ fontSize: 13, color: "var(--app-accent)", fontWeight: 600 }}>{exercise.muscles || "Geral"}</span>
       </div>
 
       {/* Sets list */}
@@ -1142,7 +1205,7 @@ function ExecucaoView({
           <span className="text-center">OK</span>
         </div>
 
-        {Array.from({ length: exercise.sets }).map((_, setIndex) => {
+        {Array.from({ length: setsCount }).map((_, setIndex) => {
           const setNum = setIndex + 1;
           const setKey = `${activeExerciseIndex}-${setNum}`;
           const isDone = checkedSets[setKey];
@@ -1180,7 +1243,7 @@ function ExecucaoView({
               <input 
                 type="text"
                 placeholder="--"
-                defaultValue={setIndex < 2 ? "12" : setIndex === 2 ? "10" : "8"}
+                defaultValue={repsText}
                 className="text-center"
                 style={{
                   background: "var(--bg-elevated)",
@@ -1247,7 +1310,7 @@ function ExecucaoView({
         </button>
         <button 
           onClick={() => {
-            if (activeExerciseIndex < EXERCISES_EXECUTION.length - 1) {
+            if (activeExerciseIndex < exercisesList.length - 1) {
               setActiveExerciseIndex(i => i + 1);
             } else {
               navigate('/feedback');
@@ -1256,7 +1319,7 @@ function ExecucaoView({
           className="flex-1 flex items-center justify-center gap-1.5 cursor-pointer border-none"
           style={{ padding: 14, borderRadius: 12, fontSize: 14, fontWeight: 700, background: "var(--app-accent)", color: "#fff" }}
         >
-          {activeExerciseIndex < EXERCISES_EXECUTION.length - 1 ? "Próximo" : "Finalizar"} <ChevronRight size={16} />
+          {activeExerciseIndex < exercisesList.length - 1 ? "Próximo" : "Finalizar"} <ChevronRight size={16} />
         </button>
       </div>
     </div>
@@ -1528,8 +1591,12 @@ function FeedbackView({
 
 // --- TEACHER VIEWPORT COMPONENTS ---
 
-function TeacherHomeView({ profile, onPublishPost, students, feedbackLogs, onSelectStudent }) {
+function TeacherHomeView({ profile, onPublishPost, students, feedbackLogs, onSelectStudent, onSelectStudentDiet, onAddStudent }) {
   const [newPostContent, setNewPostContent] = useState("");
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentEmail, setNewStudentEmail] = useState("");
+  const [newStudentPlan, setNewStudentPlan] = useState("Plano Premium");
 
   const handlePublish = (e) => {
     e.preventDefault();
@@ -1537,6 +1604,21 @@ function TeacherHomeView({ profile, onPublishPost, students, feedbackLogs, onSel
     onPublishPost(newPostContent);
     setNewPostContent("");
     alert("Postagem publicada no mural da comunidade!");
+  };
+
+  const handleAddStudentSubmit = (e) => {
+    e.preventDefault();
+    if (!newStudentName.trim() || !newStudentEmail.trim()) return;
+    onAddStudent({
+      name: newStudentName,
+      email: newStudentEmail,
+      plan: newStudentPlan
+    });
+    setNewStudentName("");
+    setNewStudentEmail("");
+    setNewStudentPlan("Plano Premium");
+    setShowAddStudent(false);
+    alert("Aluno cadastrado com sucesso!");
   };
 
   return (
@@ -1598,37 +1680,120 @@ function TeacherHomeView({ profile, onPublishPost, students, feedbackLogs, onSel
 
       {/* Students List */}
       <div className="px-5 mb-6">
-        <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Meus Alunos</h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 style={{ fontSize: 17, fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Meus Alunos</h3>
+          <button 
+            onClick={() => setShowAddStudent(true)}
+            className="flex items-center gap-1 cursor-pointer border-none"
+            style={{ padding: "6px 12px", borderRadius: 8, background: "var(--app-accent)", color: "#fff", fontSize: 12, fontWeight: 700 }}
+          >
+            <Plus size={14} /> Novo Aluno
+          </button>
+        </div>
         <div className="flex flex-col gap-2.5">
           {students.map((student) => (
             <div key={student.id} className="premium-card flex justify-between items-center">
               <div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }}>{student.name}</div>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                  {student.plan} • Sequência: {student.streak} dias
+                  {student.plan} • Sequência: {student.streak || 0} dias
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                  Último treino: {student.lastWorkout}
+                  Último treino: {student.lastWorkout || "Nunca"}
                 </div>
               </div>
-              <button
-                className="cursor-pointer border-none flex items-center justify-center gap-1"
-                onClick={() => onSelectStudent(student)}
-                style={{
-                  padding: "8px 14px",
-                  borderRadius: 10,
-                  background: "var(--app-accent-soft)",
-                  color: "var(--app-accent)",
-                  fontSize: 12,
-                  fontWeight: 700
-                }}
-              >
-                Treinos <ChevronRight size={14} />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  className="cursor-pointer border-none flex items-center justify-center gap-1"
+                  onClick={() => onSelectStudentDiet(student)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "var(--app-green-soft)",
+                    color: "var(--app-green)",
+                    fontSize: 12,
+                    fontWeight: 700
+                  }}
+                >
+                  Dieta <ChevronRight size={14} />
+                </button>
+                <button
+                  className="cursor-pointer border-none flex items-center justify-center gap-1"
+                  onClick={() => onSelectStudent(student)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    background: "var(--app-accent-soft)",
+                    color: "var(--app-accent)",
+                    fontSize: 12,
+                    fontWeight: 700
+                  }}
+                >
+                  Treinos <ChevronRight size={14} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Modal Novo Aluno */}
+      {showAddStudent && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center" 
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+        >
+          <div className="premium-card" style={{ width: "90%", maxWidth: 360, background: "var(--bg-primary)" }}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--text-primary)" }}>Novo Aluno</h3>
+              <button 
+                onClick={() => setShowAddStudent(false)} 
+                className="cursor-pointer border-none"
+                style={{ background: "transparent", color: "var(--text-secondary)" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAddStudentSubmit}>
+              <div className="form-group mb-3">
+                <label>Nome Completo</label>
+                <input 
+                  type="text" 
+                  className="premium-input" 
+                  value={newStudentName}
+                  onChange={(e) => setNewStudentName(e.target.value)}
+                  placeholder="Ex: João da Silva"
+                  required
+                />
+              </div>
+              <div className="form-group mb-3">
+                <label>E-mail</label>
+                <input 
+                  type="email" 
+                  className="premium-input" 
+                  value={newStudentEmail}
+                  onChange={(e) => setNewStudentEmail(e.target.value)}
+                  placeholder="Ex: joao@email.com"
+                  required
+                />
+              </div>
+              <div className="form-group mb-4">
+                <label>Plano</label>
+                <select 
+                  className="premium-input"
+                  value={newStudentPlan}
+                  onChange={(e) => setNewStudentPlan(e.target.value)}
+                  style={{ background: "var(--bg-elevated)", color: "var(--text-primary)", border: "1px solid var(--app-border)" }}
+                >
+                  <option value="Plano Premium">Plano Premium</option>
+                  <option value="Plano Básico">Plano Básico</option>
+                </select>
+              </div>
+              <button type="submit" className="btn-primary">Cadastrar Aluno</button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Feedbacks Log */}
       <div className="px-5">
@@ -1686,6 +1851,7 @@ function EditWorkoutView({ student, onBack }) {
   const [newExName, setNewExName] = useState("");
   const [newExMuscles, setNewExMuscles] = useState("");
   const [newExSets, setNewExSets] = useState(4);
+  const [newExVideoUrl, setNewExVideoUrl] = useState("");
 
   // Load from local storage if edited before
   useEffect(() => {
@@ -1709,7 +1875,7 @@ function EditWorkoutView({ student, onBack }) {
           exercisesCount: workout.exercisesCount + 1,
           preview: [
             ...workout.preview,
-            { name: newExName, sets: `${newExSets}x12` }
+            { name: newExName, sets: `${newExSets}x12`, muscles: newExMuscles, videoUrl: newExVideoUrl }
           ]
         };
       }
@@ -1722,6 +1888,7 @@ function EditWorkoutView({ student, onBack }) {
     setNewExName("");
     setNewExMuscles("");
     setNewExSets(4);
+    setNewExVideoUrl("");
     alert("Exercício adicionado com sucesso!");
   };
 
@@ -1843,6 +2010,16 @@ function EditWorkoutView({ student, onBack }) {
             />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
+            <label style={{ fontSize: 11 }}>Link do Vídeo Demonstrativo (opcional)</label>
+            <input 
+              type="text" 
+              placeholder="Ex: https://www.youtube.com/watch?v=..."
+              className="premium-input" 
+              value={newExVideoUrl}
+              onChange={(e) => setNewExVideoUrl(e.target.value)}
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label style={{ fontSize: 11 }}>Número de Séries ({newExSets})</label>
             <input 
               type="range" 
@@ -1857,6 +2034,255 @@ function EditWorkoutView({ student, onBack }) {
             <Plus size={16} /> Adicionar Exercício
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function EditDietView({ student, onBack }) {
+  const [kcalTarget, setKcalTarget] = useState(2200);
+  const [proteinTarget, setProteinTarget] = useState(120);
+  const [carbsTarget, setCarbsTarget] = useState(180);
+  const [fatTarget, setFatTarget] = useState(55);
+  const [waterTarget, setWaterTarget] = useState(3000);
+  const [meals, setMeals] = useState([]);
+
+  const [mealName, setMealName] = useState("");
+  const [mealTime, setMealTime] = useState("");
+  const [mealKcal, setMealKcal] = useState(300);
+  const [mealDesc, setMealDesc] = useState("");
+
+  useEffect(() => {
+    const key = student.id === 'd1a04b50-db95-4527-a407-2c663fa49d0e' ? 'gym_diet' : `diet_${student.id}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setKcalTarget(parsed.kcal_target || 2200);
+      setProteinTarget(parsed.protein_grams || 120);
+      setCarbsTarget(parsed.carbs_grams || 180);
+      setFatTarget(parsed.fat_grams || 55);
+      setWaterTarget(parsed.water_target_ml || 3000);
+      setMeals(parsed.meals || []);
+    } else {
+      setKcalTarget(2200);
+      setProteinTarget(120);
+      setCarbsTarget(180);
+      setFatTarget(55);
+      setWaterTarget(3000);
+      setMeals([
+        { name: "Café da Manhã", time: "07:30", description: "Pão integral, ovos mexidos e café", calories: 450 },
+        { name: "Almoço", time: "12:30", description: "Frango, arroz integral, feijão e salada", calories: 750 },
+        { name: "Lanche da Tarde", time: "16:00", description: "Whey protein e banana", calories: 300 },
+        { name: "Jantar", time: "19:30", description: "Peixe grelhado, batata doce e legumes", calories: 500 }
+      ]);
+    }
+  }, [student]);
+
+  const handleAddMeal = (e) => {
+    e.preventDefault();
+    if (!mealName.trim() || !mealTime.trim()) return;
+
+    const newMeal = {
+      name: mealName,
+      time: mealTime,
+      calories: parseInt(mealKcal) || 0,
+      description: mealDesc
+    };
+
+    const updatedMeals = [...meals, newMeal];
+    setMeals(updatedMeals);
+    setMealName("");
+    setMealTime("");
+    setMealKcal(300);
+    setMealDesc("");
+  };
+
+  const handleDeleteMeal = (index) => {
+    setMeals(meals.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveDiet = () => {
+    const updated = {
+      kcal_target: kcalTarget,
+      protein_grams: proteinTarget,
+      carbs_grams: carbsTarget,
+      fat_grams: fatTarget,
+      water_target_ml: waterTarget,
+      meals: meals
+    };
+
+    const key = student.id === 'd1a04b50-db95-4527-a407-2c663fa49d0e' ? 'gym_diet' : `diet_${student.id}`;
+    localStorage.setItem(key, JSON.stringify(updated));
+    alert("Plano alimentar atualizado com sucesso!");
+    onBack();
+  };
+
+  return (
+    <div style={{ paddingBottom: 24, paddingTop: 16 }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 pb-5">
+        <button 
+          onClick={onBack}
+          className="flex items-center justify-center cursor-pointer border-none"
+          style={{ width: 40, height: 40, borderRadius: "50%", background: "var(--bg-card)", border: "1px solid var(--app-border)" }}
+        >
+          <ChevronLeft size={18} style={{ color: "var(--text-secondary)" }} />
+        </button>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)" }}>Plano Alimentar</h1>
+          <p style={{ fontSize: 12, color: "var(--text-secondary)" }}>Editando dieta de {student.name}</p>
+        </div>
+      </div>
+
+      {/* Target Macros Form */}
+      <div className="px-5 mb-5">
+        <div className="premium-card">
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Metas Diárias</h3>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Calorias (kcal)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={kcalTarget}
+                onChange={(e) => setKcalTarget(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Água (ml)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={waterTarget}
+                onChange={(e) => setWaterTarget(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Proteínas (g)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={proteinTarget}
+                onChange={(e) => setProteinTarget(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Carbos (g)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={carbsTarget}
+                onChange={(e) => setCarbsTarget(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Gorduras (g)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={fatTarget}
+                onChange={(e) => setFatTarget(parseInt(e.target.value) || 0)}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Meals List */}
+      <div className="px-5 mb-5">
+        <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Refeições Cadastradas</h3>
+        {meals.length === 0 ? (
+          <div className="premium-card text-center py-4" style={{ color: "var(--text-secondary)" }}>
+            Nenhuma refeição cadastrada para este aluno.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {meals.map((meal, index) => (
+              <div key={index} className="premium-card flex justify-between items-center">
+                <div style={{ flex: 1, marginRight: 12 }}>
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{meal.name}</span>
+                    <span style={{ fontSize: 11, color: "var(--app-green)", fontWeight: 700 }}>{meal.time}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{meal.description}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{meal.calories} kcal</div>
+                </div>
+                <button 
+                  onClick={() => handleDeleteMeal(index)}
+                  className="cursor-pointer border-none flex items-center justify-center"
+                  style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(239, 68, 68, 0.1)" }}
+                >
+                  <Trash2 size={15} style={{ color: "var(--app-red)" }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Add Meal Form */}
+      <div className="px-5 mb-6">
+        <div className="premium-card">
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 12 }}>Adicionar Nova Refeição</h3>
+          <form onSubmit={handleAddMeal} className="flex flex-col gap-3.5">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontSize: 11 }}>Nome da Refeição</label>
+                <input 
+                  type="text" 
+                  className="premium-input" 
+                  value={mealName}
+                  onChange={(e) => setMealName(e.target.value)}
+                  placeholder="Ex: Almoço"
+                  required
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label style={{ fontSize: 11 }}>Horário</label>
+                <input 
+                  type="text" 
+                  className="premium-input" 
+                  value={mealTime}
+                  onChange={(e) => setMealTime(e.target.value)}
+                  placeholder="Ex: 12:30"
+                  required
+                />
+              </div>
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Calorias (kcal)</label>
+              <input 
+                type="number" 
+                className="premium-input" 
+                value={mealKcal}
+                onChange={(e) => setMealKcal(parseInt(e.target.value) || 0)}
+              />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label style={{ fontSize: 11 }}>Descrição (Alimentos e porções)</label>
+              <textarea 
+                className="premium-input" 
+                rows={2}
+                value={mealDesc}
+                onChange={(e) => setMealDesc(e.target.value)}
+                placeholder="Ex: 200g Frango, 150g Arroz..."
+                style={{ resize: "none" }}
+              />
+            </div>
+            <button type="submit" className="btn-primary" style={{ background: "linear-gradient(135deg, var(--app-green) 0%, #00b377 100%)", marginTop: 6 }}>
+              Adicionar Refeição
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <div className="px-5">
+        <button onClick={handleSaveDiet} className="btn-primary">
+          Salvar Plano Alimentar
+        </button>
       </div>
     </div>
   );
@@ -1899,6 +2325,8 @@ function AppContent() {
   const [students, setStudents] = useState(DEFAULT_STUDENTS);
   const [feedbackLogs, setFeedbackLogs] = useState(DEFAULT_FEEDBACK_LOGS);
   const [editingStudent, setEditingStudent] = useState(null);
+  const [editingStudentDiet, setEditingStudentDiet] = useState(null);
+  const [activeWorkoutLetter, setActiveWorkoutLetter] = useState('A');
 
   const isSupabaseEnabled = supabase !== null;
 
@@ -2022,6 +2450,8 @@ function AppContent() {
       setWaterGlasses(parsedDiet.water_glasses);
     }
     if (localWorkouts) setWorkouts(JSON.parse(localWorkouts));
+    const localPosts = localStorage.getItem('gym_posts');
+    if (localPosts) setPosts(JSON.parse(localPosts));
   };
 
   // Sync UI class theme
@@ -2146,7 +2576,9 @@ function AppContent() {
       comments_count: 0
     };
 
-    setPosts(prev => [newPost, ...prev]);
+    const updated = [newPost, ...posts];
+    setPosts(updated);
+    localStorage.setItem('gym_posts', JSON.stringify(updated));
 
     if (isSupabaseEnabled) {
       await supabase.from('community_posts').insert({
@@ -2157,6 +2589,64 @@ function AppContent() {
         likes_count: 0,
         comments_count: 0
       });
+    }
+  };
+
+  const handleDeletePost = async (postId, index) => {
+    if (!window.confirm("Deseja realmente excluir esta publicação?")) return;
+
+    const updated = posts.filter((_, idx) => idx !== index);
+    setPosts(updated);
+    localStorage.setItem('gym_posts', JSON.stringify(updated));
+
+    if (isSupabaseEnabled && postId) {
+      try {
+        await supabase.from('community_posts').delete().eq('id', postId);
+      } catch (e) {
+        console.error("Falha ao excluir post no Supabase:", e);
+      }
+    }
+  };
+
+  const handleAddStudent = async ({ name, email, plan }) => {
+    const newId = crypto.randomUUID ? crypto.randomUUID() : `std_${Date.now()}`;
+    const newStudent = {
+      id: newId,
+      name: name,
+      plan: plan,
+      lastWorkout: 'Nunca',
+      status: 'Ativo',
+      streak: 0
+    };
+
+    const updated = [...students, newStudent];
+    setStudents(updated);
+    localStorage.setItem('gym_students', JSON.stringify(updated));
+
+    if (isSupabaseEnabled) {
+      try {
+        await supabase.from('profiles').insert({
+          id: newId,
+          full_name: name,
+          plan_name: plan,
+          role: 'student',
+          streak_days: 0,
+          access_days_remaining: 30
+        });
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        await supabase.from('diet_logs').insert({
+          profile_id: newId,
+          log_date: todayStr,
+          kcal_consumed: 0,
+          water_glasses: 0,
+          protein_grams: 0,
+          carbs_grams: 0,
+          fat_grams: 0
+        });
+      } catch (e) {
+        console.error("Falha ao registrar novo aluno no Supabase:", e);
+      }
     }
   };
 
@@ -2203,10 +2693,14 @@ function AppContent() {
   }, [timerRunning]);
 
   if (!currentUser) {
-    return <LoginView onLogin={handleLogin} />;
+    return (
+      <div className="app-container">
+        <LoginView onLogin={handleLogin} />
+      </div>
+    );
   }
 
-  const showNavbar = !['/execucao', '/agenda', '/feedback', '/perfil'].includes(location.pathname) && !editingStudent;
+  const showNavbar = !['/execucao', '/agenda', '/feedback', '/perfil'].includes(location.pathname) && !editingStudent && !editingStudentDiet;
   const isTeacher = currentUser.role === 'teacher';
 
   return (
@@ -2270,6 +2764,11 @@ function AppContent() {
               student={editingStudent} 
               onBack={() => setEditingStudent(null)} 
             />
+          ) : editingStudentDiet ? (
+            <EditDietView 
+              student={editingStudentDiet} 
+              onBack={() => setEditingStudentDiet(null)} 
+            />
           ) : (
             <Routes>
               <Route 
@@ -2281,10 +2780,12 @@ function AppContent() {
                     students={students}
                     feedbackLogs={feedbackLogs}
                     onSelectStudent={(student) => setEditingStudent(student)}
+                    onSelectStudentDiet={(student) => setEditingStudentDiet(student)}
+                    onAddStudent={handleAddStudent}
                   />
                 } 
               />
-              <Route path="/comunidade" element={<ComunidadeView posts={posts} likedPosts={likedPosts} handleToggleLike={handleToggleLike} />} />
+              <Route path="/comunidade" element={<ComunidadeView posts={posts} likedPosts={likedPosts} handleToggleLike={handleToggleLike} onDeletePost={handleDeletePost} currentUser={currentUser} />} />
               <Route path="/perfil" element={<PerfilView profile={currentUser} uiTheme={uiTheme} setUiTheme={setUiTheme} onLogout={handleLogout} />} />
               <Route path="*" element={<Navigate to="/professor" replace />} />
             </Routes>
@@ -2292,14 +2793,15 @@ function AppContent() {
         ) : (
           <Routes>
             <Route path="/" element={<HomeView profile={profile} diet={diet} />} />
-            <Route path="/treinos" element={<TreinosView workouts={workouts} setActiveExerciseIndex={setActiveExerciseIndex} setCheckedSets={setCheckedSets} />} />
+            <Route path="/treinos" element={<TreinosView workouts={workouts} setActiveExerciseIndex={setActiveExerciseIndex} setCheckedSets={setCheckedSets} setActiveWorkoutLetter={setActiveWorkoutLetter} />} />
             <Route path="/dieta" element={<DietaView diet={diet} waterGlasses={waterGlasses} handleUpdateWater={handleUpdateWater} activeMealIndex={activeMealIndex} setActiveMealIndex={setActiveMealIndex} />} />
-            <Route path="/comunidade" element={<ComunidadeView posts={posts} likedPosts={likedPosts} handleToggleLike={handleToggleLike} />} />
+            <Route path="/comunidade" element={<ComunidadeView posts={posts} likedPosts={likedPosts} handleToggleLike={handleToggleLike} onDeletePost={handleDeletePost} currentUser={currentUser} />} />
             <Route path="/perfil" element={<PerfilView profile={profile} uiTheme={uiTheme} setUiTheme={setUiTheme} onLogout={handleLogout} />} />
             <Route 
               path="/execucao" 
               element={
                 <ExecucaoView 
+                  activeWorkout={workouts.find(w => w.letter === activeWorkoutLetter) || workouts[0]}
                   activeExerciseIndex={activeExerciseIndex} 
                   setActiveExerciseIndex={setActiveExerciseIndex} 
                   checkedSets={checkedSets} 
