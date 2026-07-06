@@ -2293,6 +2293,7 @@ function EditDietView({ student, onBack }) {
 function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
+  const viewportRef = useRef(null);
 
   // --- AUTHENTICATION STATE ---
   const [currentUser, setCurrentUser] = useState(() => {
@@ -2458,6 +2459,13 @@ function AppContent() {
   useEffect(() => {
     document.body.className = uiTheme;
   }, [uiTheme]);
+
+  // Scroll to top on page change or edit view toggles
+  useEffect(() => {
+    if (viewportRef.current) {
+      viewportRef.current.scrollTop = 0;
+    }
+  }, [location.pathname, editingStudent, editingStudentDiet]);
 
   const handleUpdateWater = async (newGlasses) => {
     setWaterGlasses(newGlasses);
@@ -2756,6 +2764,7 @@ function AppContent() {
 
       {/* Main viewport */}
       <div 
+        ref={viewportRef}
         className="flex-1 overflow-y-auto overflow-x-hidden"
         style={{ 
           paddingTop: showTopHeader ? 0 : "env(safe-area-inset-top, 24px)",
